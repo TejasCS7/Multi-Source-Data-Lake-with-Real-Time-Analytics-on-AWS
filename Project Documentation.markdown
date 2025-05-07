@@ -55,8 +55,7 @@ The pipeline follows a modular, serverless architecture for scalability and cost
 5. **Orchestration**: Step Functions (`data-lake-orchestration`) manage the end-to-end workflow.
 
 ### Architecture Diagram  
-*(Note: In a real-world scenario, you’d include a diagram here. For now, this is a placeholder.)*  
-- S3 Buckets → Kinesis Streams → Lambda Processing → S3 Processed → Glue ETL → S3 Analytics → Step Functions Orchestration.
+![animation](https://github.com/TejasCS7/Cloud-Cost-Optimization-and-Finops-Dashboard/blob/0375c8548bcda192ceade9d7d6c3393cdc7aa397/chrome-capture-2024-5-23-ezgif.com-resize.gif)
 
 ---
 
@@ -87,47 +86,21 @@ multi-source-data-lake/
 ### Step 1: Data Ingestion with Kinesis  
 - **Setup**: Created two Kinesis Data Streams (`manufacturing-data-stream`, `ecommerce-data-stream`) with on-demand capacity.  
 - **Simulation**: A Lambda function (`data-ingestion-simulator`) reads raw CSV data from S3 and streams it to Kinesis using the `put_records` API.  
-- **Code Snippet** (from `data-ingestion-simulator`):  
-```python
-def send_kinesis_batch(stream_name, records, pk_field):
-    entries = [{'Data': json.dumps(record), 'PartitionKey': str(record.get(pk_field, 'default'))} for record in records]
-    response = kinesis.put_records(Records=entries, StreamName=stream_name)
-    return len(records) - response['FailedRecordCount']
-```
+
 
 ### Step 2: Real-Time Processing with Lambda  
 - **Functions**: `manufacturing-data-processor` calculates maintenance priority scores; `ecommerce-data-processor` computes customer value scores.  
 - **Metrics**: Achieved **100% Kinesis PutRecord.Success** at sub-10ms latency.  
-- **Code Snippet** (from `manufacturing-data-processor`):  
-```python
-maintenance_priority = (0.3 * temp/100) + (0.25 * vibration/10) + (0.15 * anomaly) + (0.3 * downtime_risk)
-data['maintenance_priority_score'] = round(maintenance_priority, 2)
-```
+
 
 ### Step 3: ETL with AWS Glue  
 - **Crawlers**: `manufacturing_data_crawler` and `ecommerce_data_crawler` catalog processed data into the Glue Data Catalog.  
 - **ETL Jobs**: `manufacturing_etl_job` and `ecommerce_etl_job` transform data into Parquet, reducing storage by **90% (582KB → 159KB)**.  
-- **Code Snippet** (from `manufacturing_etl_job`):  
-```python
-manufacturing_df = manufacturing_df.withColumn(
-    "machine_efficiency", 
-    F.when(F.col("energy_consumption") > 0, 
-           F.col("predicted_remaining_life") / F.col("energy_consumption")).otherwise(0)
-)
-```
+
 
 ### Step 4: Analytics and Integration  
 - **Analytics**: Lambda functions (`manufacturing-analytics`, `ecommerce-analytics`) generate summaries for visualization.  
 - **Integration**: `data-integration` combines insights for cross-domain analysis, calculating metrics like `operational_excellence_score`.  
-- **Code Snippet** (from `data-integration`):  
-```python
-integrated_insights = {
-    "cross_domain_insights": {
-        "operational_excellence_score": (mfg_data.get("average_machine_efficiency", 0) * 0.6 + 
-                                        ecom_data.get("customer_satisfaction_index", 0) / 10 * 0.4)
-    }
-}
-```
 
 ### Step 5: Orchestration with Step Functions  
 - **State Machine**: `data-lake-orchestration` runs ETL and analytics in parallel, ensuring efficient workflow execution.  
@@ -226,23 +199,7 @@ aws lambda create-function --function-name data-ingestion-simulator --runtime py
 
 ---
 
-## 📚 References and Resources
-
-- AWS Documentation: [Kinesis](https://docs.aws.amazon.com/kinesis/), [Lambda](https://docs.aws.amazon.com/lambda/), [Glue](https://docs.aws.amazon.com/glue/), [Step Functions](https://docs.aws.amazon.com/step-functions/).  
-- Datasets: `smart_manufacturing_data.csv`, `Ecommerce_Consumer_Behavior_Analysis_Data.csv` (sourced internally).  
-- Blog: [AWS Big Data Blog](https://aws.amazon.com/blogs/big-data/) for best practices on serverless data pipelines.
-
----
-
 ## 📬 Contact Information
 
 For questions, feedback, or collaboration opportunities, reach out via:  
-- **GitHub**: [github.com/your-profile](#)  
-- **LinkedIn**: [linkedin.com/in/your-profile](#)  
-- **Email**: [your-email@example.com](#)
-
----
-
-## 🙏 Acknowledgments
-
-Special thanks to the AWS community for their extensive documentation and tutorials, which were instrumental in building this project. Gratitude to my team for their support and feedback throughout the development process.
+tejasdgaikwad265@gmail.com | [LinkedIn](https://www.linkedin.com/in/tejas-gaikawad/) | [GitHub](https://github.com/TejasCS7)
