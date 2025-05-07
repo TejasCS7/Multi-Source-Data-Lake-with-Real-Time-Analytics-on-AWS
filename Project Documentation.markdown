@@ -151,12 +151,6 @@ multi-source-data-lake/
 7. **Scheduling**:  
    - Use EventBridge to schedule `data-ingestion-simulator` every 5 minutes.
 
-### Deployment Command Example  
-*(Note: This is a placeholder; in a real scenario, you’d use AWS CLI or CDK.)*  
-```bash
-aws lambda create-function --function-name data-ingestion-simulator --runtime python3.10 --role arn:aws:iam::ACCOUNT_ID:role/lambda-data-processing-role --handler lambda_function.lambda_handler
-```
-
 ---
 
 ## 📊 Results and Impact
