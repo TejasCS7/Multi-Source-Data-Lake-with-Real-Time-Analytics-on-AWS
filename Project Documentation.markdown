@@ -55,7 +55,7 @@ The pipeline follows a modular, serverless architecture for scalability and cost
 5. **Orchestration**: Step Functions (`data-lake-orchestration`) manage the end-to-end workflow.
 
 ### Architecture Diagram  
-![animation](https://github.com/TejasCS7/Cloud-Cost-Optimization-and-Finops-Dashboard/blob/0375c8548bcda192ceade9d7d6c3393cdc7aa397/chrome-capture-2024-5-23-ezgif.com-resize.gif)
+![animation](https://github.com/TejasCS7/Multi-Source-Data-Lake-with-Real-Time-Analytics-on-AWS/blob/e3018396a50999fe3927620f1927715b09a69c20/wrv.png)
 
 ---
 
