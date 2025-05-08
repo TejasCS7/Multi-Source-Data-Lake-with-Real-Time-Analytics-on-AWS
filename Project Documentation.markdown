@@ -24,7 +24,7 @@ Manufacturing and ecommerce businesses often face:
 - **Delayed Analytics**: Traditional batch processing hinders timely decision-making.  
 - **High Cloud Costs**: Inefficient resource usage leads to escalating expenses.
 
-### Our Solution  
+### My Solution  
 A unified AWS data lake that:  
 - Ingests **100,000 records/day** in real-time using Kinesis Data Streams.  
 - Processes data with Lambda and Glue, reducing ETL time from hours to **1m17s**.  
