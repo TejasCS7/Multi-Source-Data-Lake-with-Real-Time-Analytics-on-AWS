@@ -1,0 +1,72 @@
+{
+  "Comment": "Data Lake Pipeline Orchestration",
+  "StartAt": "Parallel Data Processing",
+  "States": {
+    "Parallel Data Processing": {
+      "Type": "Parallel",
+      "Branches": [
+        {
+          "StartAt": "Run Manufacturing ETL",
+          "States": {
+            "Run Manufacturing ETL": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Parameters": {
+                "JobName": "manufacturing_etl_job"
+              },
+              "Next": "Manufacturing Analytics"
+            },
+            "Manufacturing Analytics": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:ap-south-1:934484537136:function:manufacturing-analytics",
+                "Payload": {
+                  "source": "step-functions"
+                }
+              },
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "Run Ecommerce ETL",
+          "States": {
+            "Run Ecommerce ETL": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Parameters": {
+                "JobName": "ecommerce_etl_job"
+              },
+              "Next": "Ecommerce Analytics"
+            },
+            "Ecommerce Analytics": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "arn:aws:lambda:ap-south-1:934484537136:function:ecommerce-analytics",
+                "Payload": {
+                  "source": "step-functions"
+                }
+              },
+              "End": true
+            }
+          }
+        }
+      ],
+      "Next": "Final Data Integration"
+    },
+    "Final Data Integration": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:ap-south-1:934484537136:function:data-integration",
+        "Payload": {
+          "source": "step-functions",
+          "timestamp": "$$.Execution.StartTime"
+        }
+      },
+      "End": true
+    }
+  }
+}
