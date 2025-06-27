@@ -21,7 +21,7 @@ spark.conf.set("spark.sql.adaptive.enabled", "true")   # Enable adaptive query e
 # Define source and target
 database = "multi_source_data_sea"
 target_path = "s3://multi-source-data-sea/analytics/ecommerce/"
-ecommerce_table = "ecommerce"  # Make sure to define this
+ecommerce_table = "ecommerce"
 
 try:
     # --- PARALLEL DATA LOADING ---
@@ -58,34 +58,57 @@ try:
     if ecommerce_df is None:
         raise Exception("No data was successfully loaded")
 
-    # --- DATA OPTIMIZATIONS ---
+    # Log schema for debugging
+    logger.info("Original Schema:")
+    ecommerce_df.printSchema()
+
+    # --- DATA CLEANSING ---
+    # Clean purchase amount (remove $ and convert to numeric)
+    ecommerce_df = ecommerce_df.withColumn(
+        "cleaned_purchase_amount",
+        F.regexp_replace(F.col("purchase_amount"), "[$,]", "").cast("double")
+    )
+
+    # Ensure time_to_decision is numeric and handle NULLs
+    ecommerce_df = ecommerce_df.withColumn(
+        "cleaned_time_to_decision",
+        F.coalesce(F.col("time_to_decision").cast("double"), F.lit(0))
+    )
+
+    # --- DATA TRANSFORMATIONS ---
+    # Calculate purchase efficiency with proper handling
+    ecommerce_df = ecommerce_df.withColumn(
+        "purchase_efficiency",
+        F.when(
+            (F.col("cleaned_time_to_decision") > 0) &
+            (F.col("cleaned_purchase_amount").isNotNull()),
+            F.col("cleaned_purchase_amount") / F.col("cleaned_time_to_decision")
+        ).otherwise(0)
+    )
+
     # Cache only if dataset isn't too large
     if ecommerce_df.count() < 500000:  # Adjust based on your cluster size
         ecommerce_df.cache()
         logger.info("DataFrame cached for faster processing")
 
-    # Efficient column operations
-    ecommerce_df = ecommerce_df.withColumn(
-        "purchase_efficiency",
-        F.when(F.col("Time_to_Decision") > 0,
-              F.col("Purchase_Amount") / F.col("Time_to_Decision"))
-        .otherwise(0)
-    )
-
     # --- OPTIMIZED AGGREGATIONS ---
-    customer_agg = ecommerce_df.groupBy("Customer_ID").agg(
-        F.sum("Purchase_Amount").alias("total_purchase_amount"),
-        F.avg("Purchase_Amount").alias("avg_purchase_amount"),
-        F.count("*").alias("purchase_count"),  # More efficient than counting a column
-        F.avg("Customer_Satisfaction").alias("avg_satisfaction"),
-        F.avg("Product_Rating").alias("avg_product_rating"),
-        F.max("Customer_Satisfaction").alias("customer_value_score")
+    customer_agg = ecommerce_df.groupBy("customer_id").agg(
+        F.sum("cleaned_purchase_amount").alias("total_purchase_amount"),
+        F.avg("cleaned_purchase_amount").alias("avg_purchase_amount"),
+        F.count("*").alias("purchase_count"),
+        F.avg("customer_satisfaction").alias("avg_satisfaction"),
+        F.avg("product_rating").alias("avg_product_rating"),
+        F.max("customer_satisfaction").alias("customer_value_score")
     ).withColumn(
         "customer_segment",
         F.when(F.col("customer_value_score") > 0.8, "HIGH_VALUE")
          .when(F.col("customer_value_score") > 0.5, "MEDIUM_VALUE")
          .otherwise("STANDARD")
     )
+
+    # Log sample data for verification
+    logger.info("Sample purchase efficiency values:")
+    ecommerce_df.select("customer_id", "purchase_amount", "time_to_decision", "purchase_efficiency").show(5)
 
     # --- OPTIMIZED WRITES ---
     # Write aggregations (direct Spark write is faster)
@@ -96,7 +119,7 @@ try:
 
     # Write processed data (partition if large)
     if ecommerce_df.count() > 100000:
-        ecommerce_df.write.mode("overwrite").partitionBy("Customer_ID").parquet(
+        ecommerce_df.write.mode("overwrite").partitionBy("customer_id").parquet(
             path=target_path + "processed/",
             compression="snappy"
         )
