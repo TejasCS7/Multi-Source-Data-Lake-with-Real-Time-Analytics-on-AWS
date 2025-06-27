@@ -2,6 +2,7 @@ import sys
 from multiprocessing.pool import ThreadPool
 from pyspark.context import SparkContext
 from pyspark.sql import functions as F
+from pyspark.sql.types import IntegerType, FloatType, DoubleType
 from awsglue.transforms import *
 from awsglue.utils import getResolvedOptions
 from awsglue.context import GlueContext
@@ -19,13 +20,12 @@ database = "multi_source_data_sea"
 target_path = "s3://multi-source-data-sea/analytics/manufacturing/"
 
 # --- OPTIMIZATION CONFIGURATIONS ---
-# (Only setting allowed configurations)
-spark.conf.set("spark.sql.shuffle.partitions", "200")  # Allowed
-spark.conf.set("spark.sql.adaptive.enabled", "true")  # Allowed
+spark.conf.set("spark.sql.shuffle.partitions", "200")
+spark.conf.set("spark.sql.adaptive.enabled", "true")
 
 try:
     # --- TABLE PROCESSING ---
-    # Get tables using Spark SQL (faster than Glue API)
+    # Get tables using Spark SQL
     tables_df = spark.sql(f"SHOW TABLES IN {database}")
     tables = [row['tableName'] for row in tables_df.collect()]
     
@@ -37,18 +37,29 @@ try:
     # --- PARALLEL TABLE READING ---
     def process_table(table_name):
         try:
-            # Pushdown predicate if possible
             dyf = glueContext.create_dynamic_frame.from_catalog(
                 database=database,
                 table_name=table_name
             )
-            df = dyf.toDF().withColumn("source_table", F.lit(table_name))
+            df = dyf.toDF()
+            
+            # Identify columns that actually contain data
+            non_null_cols = [col for col in df.columns 
+                           if df.filter(F.col(col).isNotNull()).count() > 0]
+            
+            # Always include these essential columns
+            essential_cols = {'machine_id', 'energy_consumption', 'predicted_remaining_life'}
+            cols_to_keep = list(set(non_null_cols) | essential_cols)
+            
+            # Select only columns with data
+            df = df.select(cols_to_keep).withColumn("source_table", F.lit(table_name))
+            
             return df
         except Exception as e:
             logger.error(f"Error processing {table_name}: {str(e)}")
             return None
 
-    # Process 4 tables at a time (adjust based on DPUs)
+    # Process 4 tables at a time
     with ThreadPool(4) as pool:
         dfs = pool.map(process_table, tables)
     
@@ -61,48 +72,58 @@ try:
     for df in dfs[1:]:
         all_manufacturing_df = all_manufacturing_df.unionByName(df, allowMissingColumns=True)
 
-    # --- DATA OPTIMIZATIONS ---
-    # Cache only if dataset fits in memory
-    if all_manufacturing_df.count() < 1000000:  # Adjust threshold
-        all_manufacturing_df.cache()
-    
-    # Early filtering
-    all_manufacturing_df = all_manufacturing_df.filter(
-        F.col("energy_consumption").isNotNull() & 
-        F.col("predicted_remaining_life").isNotNull()
-    )
+    # --- DATA VALIDATION AND TRANSFORMATIONS ---
+    # Validate vibration readings (log warning if negative)
+    if "vibration" in all_manufacturing_df.columns:
+        try:
+            negative_vibration_count = all_manufacturing_df.filter(F.col("vibration") < 0).count()
+            if negative_vibration_count > 0:
+                logger.info(f"Found {negative_vibration_count} records with negative vibration values")
+        except Exception as e:
+            logger.error(f"Error checking vibration values: {str(e)}")
 
-    # Efficient column operations
+    # Calculate machine efficiency with bounds/clamping
     all_manufacturing_df = all_manufacturing_df.withColumn(
         "machine_efficiency",
-        F.when(F.col("energy_consumption") > 0, 
-               F.col("predicted_remaining_life") / F.col("energy_consumption"))
-        .otherwise(0)
+        F.when(F.col("energy_consumption") <= 0, 0)
+         .otherwise(
+             F.least(F.lit(500), 
+             F.greatest(F.lit(0),
+             F.col("predicted_remaining_life") / F.col("energy_consumption")))
+         )
+    )
+
+    # Filter out null values in key columns
+    all_manufacturing_df = all_manufacturing_df.filter(
+        F.col("energy_consumption").isNotNull() & 
+        F.col("predicted_remaining_life").isNotNull() &
+        F.col("machine_id").isNotNull()
     )
 
     # --- AGGREGATIONS ---
-    machine_agg = all_manufacturing_df.groupBy("machine_id").agg(
-        F.avg("temperature").alias("avg_temperature"),
-        F.avg("vibration").alias("avg_vibration"),
-        F.avg("humidity").alias("avg_humidity"),
-        F.avg("pressure").alias("avg_pressure"),
-        F.avg("energy_consumption").alias("avg_energy_consumption"),
-        F.avg("downtime_risk").alias("avg_downtime_risk"),
+    # Get numeric columns for aggregation
+    numeric_cols = [col for col, dtype in all_manufacturing_df.dtypes 
+                   if dtype in ('int', 'bigint', 'float', 'double', 'decimal') 
+                   and col not in {'machine_id', 'source_table'}]
+    
+    agg_exprs = [F.avg(col).alias(f"avg_{col}") for col in numeric_cols]
+    agg_exprs.extend([
         F.sum(F.when(F.col("anomaly_flag") > 0, 1).otherwise(0)).alias("total_anomalies"),
-        F.avg("maintenance_required").alias("avg_maintenance_priority"),
         F.count("*").alias("total_records"),
         F.countDistinct("source_table").alias("source_tables_count")
-    )
+    ])
+    
+    machine_agg = all_manufacturing_df.groupBy("machine_id").agg(*agg_exprs)
 
     # --- OPTIMIZED WRITES ---
-    # Write aggregations (use direct Spark for better performance)
+    # Write aggregations
     machine_agg.write.mode("overwrite").parquet(
         path=target_path + "machine_aggregations/",
         compression="snappy"
     )
 
     # Write processed data (partition if large dataset)
-    if all_manufacturing_df.count() > 100000:  # Adjust threshold
+    if all_manufacturing_df.count() > 100000:
         all_manufacturing_df.write.mode("overwrite").partitionBy("machine_id").parquet(
             path=target_path + "processed/",
             compression="snappy"
