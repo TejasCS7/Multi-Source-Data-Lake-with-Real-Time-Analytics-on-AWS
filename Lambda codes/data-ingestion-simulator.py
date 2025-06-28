@@ -2,12 +2,12 @@ import json
 import boto3
 import csv
 import io
-import time  # <-- This was missing
-from concurrent.futures import ThreadPoolExecutor
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
 # Configuration
-BUCKET_NAME = 'multi-source-data-lake'
+BUCKET_NAME = 'multi-source-data-sea'
 ECOMMERCE_FILE = 'raw/ecommerce/Ecommerce_Consumer_Behavior_Analysis_Data.csv'
 MANUFACTURING_FILE = 'raw/manufacturing/smart_manufacturing_data.csv'
 ECOMMERCE_STREAM = 'ecommerce-data-stream'
@@ -22,10 +22,11 @@ kinesis = boto3.client('kinesis')
 s3 = boto3.client('s3')
 
 def process_file_to_kinesis(bucket, key, stream_name, pk_field='Customer_ID'):
-    """Process CSV and send to Kinesis with maximum throughput"""
+    """Process entire CSV and send to Kinesis, detecting natural end of dataset"""
     response = s3.get_object(Bucket=bucket, Key=key)
     reader = csv.DictReader(io.TextIOWrapper(response['Body']))
     
+    total_records = 0
     with ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
         futures = []
         batch = []
@@ -42,7 +43,9 @@ def process_file_to_kinesis(bucket, key, stream_name, pk_field='Customer_ID'):
                     pk_field=pk_field
                 ))
                 batch = []
+                total_records += RECORDS_PER_BATCH
         
+        # Send final partial batch
         if batch:
             futures.append(executor.submit(
                 send_kinesis_batch,
@@ -50,8 +53,15 @@ def process_file_to_kinesis(bucket, key, stream_name, pk_field='Customer_ID'):
                 records=batch,
                 pk_field=pk_field
             ))
+            total_records += len(batch)
+        
+        # Wait for all batches to complete and count successes
+        successful_records = 0
+        for future in as_completed(futures):
+            successful_records += future.result()
             
-        return sum(f.result() for f in futures)
+        print(f"Finished processing {stream_name}. Total records: {total_records}, Successful writes: {successful_records}")
+        return successful_records
 
 def send_kinesis_batch(stream_name, records, pk_field):
     """Send batch using PutRecords API"""
@@ -80,25 +90,28 @@ def lambda_handler(event, context):
     try:
         # Process both files in parallel
         with ThreadPoolExecutor(max_workers=2) as executor:
-            ecom_future = executor.submit(
-                process_file_to_kinesis,
-                BUCKET_NAME, ECOMMERCE_FILE, ECOMMERCE_STREAM, 'Customer_ID'
-            )
-            mfg_future = executor.submit(
-                process_file_to_kinesis,
-                BUCKET_NAME, MANUFACTURING_FILE, MANUFACTURING_STREAM, 'machine_id'
-            )
-            
-            results = {
-                'ecommerce': ecom_future.result(),
-                'manufacturing': mfg_future.result()
+            futures = {
+                executor.submit(
+                    process_file_to_kinesis,
+                    BUCKET_NAME, ECOMMERCE_FILE, ECOMMERCE_STREAM, 'Customer_ID'
+                ): 'ecommerce',
+                executor.submit(
+                    process_file_to_kinesis,
+                    BUCKET_NAME, MANUFACTURING_FILE, MANUFACTURING_STREAM, 'machine_id'
+                ): 'manufacturing'
             }
+            
+            # Wait for both streams to complete
+            for future in as_completed(futures):
+                stream_name = futures[future]
+                results[stream_name] = future.result()
         
         return {
             'statusCode': 200,
             'body': json.dumps({
                 'records_processed': results,
-                'time_elapsed_sec': round(time.time() - start_time, 2)
+                'time_elapsed_sec': round(time.time() - start_time, 2),
+                'message': 'Successfully processed all records from both datasets'
             })
         }
         
