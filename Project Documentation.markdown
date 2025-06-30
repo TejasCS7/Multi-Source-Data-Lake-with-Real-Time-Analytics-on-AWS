@@ -27,20 +27,20 @@ Manufacturing and ecommerce businesses often face:
 ### My Solution  
 A unified AWS data lake that:  
 - Ingests **100,000 records/day** in real-time using Kinesis Data Streams.  
-- Processes data with Lambda and Glue, reducing ETL time from hours to **1m17s**.  
-- Optimizes costs, achieving S3 storage at **$0.004/month** for 317.5MB via lifecycle policies and Parquet optimization.
+- Processes data with Lambda and Glue, reducing ETL time from hours to **2m35s**.  
+- Optimizes costs, achieving S3 storage at **$0/month** for 19.2MB via lifecycle policies and Parquet optimization.
 
 ---
 
 ## 🏆 Key Achievements
 
-- **Massive Scale**: Processed **100,000 manufacturing records/day (6.4 MB/sec)** in real-time using Kinesis, enabling sub-second analytics.  
-- **Cost Optimization**: Reduced S3 storage costs to **$0.004/month** for 29,289 objects (317.5MB) through 90% storage reduction (582KB → 159KB).  
+- **Massive Scale**: Processed **100,000 manufacturing records/day (0.122 MB/sec)** in real-time using Kinesis, enabling sub-second analytics.  
+- **Cost Optimization**: Reduced S3 storage costs to **$0/month** for 185 objects (19.2MB) through 59-70% data compression (manufacturing: 6.9MB → 2.8MB, ecommerce: 189.6KB → 57KB).  
 - **Predictive Maintenance**: Detected **30 high-priority alerts/day** (avg score: 1.55), enabling proactive maintenance in manufacturing.  
-- **ETL Efficiency**: Slashed Glue ETL processing time from hours to **1m17s**, accelerating analytics delivery.  
-- **Data Optimization**: Achieved **90% data compression (21.8MB → 2.3MB)** using Parquet, enhancing storage and query performance.  
+- **ETL Efficiency**: Slashed Glue ETL processing time from hours to **2m35s(manufacturing)** and **1m16s(ecommerce)**, accelerating analytics delivery.  
+- **Data Optimization**: Achieved **59-70% data compression (manufacturing: 6.9MB → 2.8MB, ecommerce: 189.6KB → 57KB)** using Parquet, enhancing storage and query performance.  
 - **Customer Insights**: Identified **8% high-value ecommerce customers** (avg score: 0.44) for targeted marketing campaigns.  
-- **Real-Time Excellence**: Sustained **100% Kinesis PutRecord.Success** at sub-10ms latency for 100,000 records/day.
+- **Real-Time Excellence**: Sustained **100% Kinesis PutRecord.Success** at sub-22ms latency for 100,000 records/day.
 
 ---
 
@@ -62,9 +62,9 @@ The pipeline follows a modular, serverless architecture for scalability and cost
 ## 📂 Project Structure
 
 ### Directory Structure  
-The S3 bucket (`multi-source-data-lake`) is organized as follows:  
+The S3 bucket (`multi-source-data-sea`) is organized as follows:  
 ```
-multi-source-data-lake/
+multi-source-data-sea/
 ├── raw/
 │   ├── manufacturing/
 │   │   └── smart_manufacturing_data.csv
@@ -90,12 +90,12 @@ multi-source-data-lake/
 
 ### Step 2: Real-Time Processing with Lambda  
 - **Functions**: `manufacturing-data-processor` calculates maintenance priority scores; `ecommerce-data-processor` computes customer value scores.  
-- **Metrics**: Achieved **100% Kinesis PutRecord.Success** at sub-10ms latency.  
+- **Metrics**: Achieved **100% Kinesis PutRecord.Success** at sub-22ms latency.  
 
 
 ### Step 3: ETL with AWS Glue  
 - **Crawlers**: `manufacturing_data_crawler` and `ecommerce_data_crawler` catalog processed data into the Glue Data Catalog.  
-- **ETL Jobs**: `manufacturing_etl_job` and `ecommerce_etl_job` transform data into Parquet, reducing storage by **90% (582KB → 159KB)**.  
+- **ETL Jobs**: `manufacturing_etl_job` and `ecommerce_etl_job` transform data into Parquet, reducing storage by **59-70% (manufacturing: 6.9MB → 2.8MB, ecommerce: 189.6KB → 57KB)**.  
 
 
 ### Step 4: Analytics and Integration  
@@ -126,7 +126,7 @@ multi-source-data-lake/
 
 ### Step-by-Step Setup  
 1. **S3 Setup**:  
-   - Create an S3 bucket (`multi-source-data-lake`).  
+   - Create an S3 bucket (`multi-source-data-sea`).  
    - Set up folders: `/raw/manufacturing/`, `/raw/ecommerce/`, `/processed/`, `/analytics/`.  
    - Upload datasets to `/raw/` folders.  
 
@@ -141,32 +141,29 @@ multi-source-data-lake/
    - Configure Kinesis triggers for processing functions (batch size: 100).  
 
 5. **Glue ETL**:  
-   - Create a Glue database (`multi_source_data_lake`).  
+   - Create a Glue database (`multi_source_data_sea`).  
    - Set up crawlers (`manufacturing_data_crawler`, `ecommerce_data_crawler`) to catalog processed data.  
    - Deploy ETL jobs (`manufacturing_etl_job`, `ecommerce_etl_job`) to transform data into Parquet.  
 
 6. **Step Functions**:  
    - Deploy the state machine (`data-lake-orchestration`) to orchestrate the pipeline.  
 
-7. **Scheduling**:  
-   - Use EventBridge to schedule `data-ingestion-simulator` every 5 minutes.
-
 ---
 
 ## 📊 Results and Impact
 
 ### Quantitative Results  
-- Processed **100,000 records/day** at 6.4 MB/sec with sub-10ms latency.  
-- Reduced S3 costs to **$0.004/month** for 317.5MB via 90% storage reduction.  
-- Cut ETL processing time from hours to **1m17s**, enabling near-real-time analytics.  
-- Achieved **90% data compression (21.8MB → 2.3MB)** with Parquet.  
+- Processed **100,000 records/day** at 0.122 MB/sec with sub-22ms latency.  
+- Reduced S3 costs to **$0/month** for 19.2MB via 59-70% storage reduction.  
+- Cut ETL processing time from hours to **2m35s (manufacturing) and 1m16s (ecommerce)**, enabling near-real-time analytics.  
+- Achieved **59-70% data compression (manufacturing: 6.9MB → 2.8MB, ecommerce: 189.6KB → 57KB)** with Parquet.  
 - Detected **30 high-priority alerts/day**, preventing manufacturing downtime.  
 - Identified **8% high-value customers**, boosting ecommerce marketing ROI.
 
 ### Business Impact  
 - **Operational Efficiency**: Enabled real-time decision-making for predictive maintenance, reducing equipment downtime.  
 - **Revenue Growth**: Enhanced marketing strategies through high-value customer segmentation.  
-- **Cost Savings**: Minimized cloud expenses, achieving one of the lowest S3 storage costs at $0.004/month.
+- **Cost Savings**: Minimized cloud expenses, achieving one of the lowest S3 storage costs at $0/month.
 
 ---
 
@@ -180,7 +177,7 @@ multi-source-data-lake/
 ### Validation Results  
 - **Data Integrity**: 100% ingestion success rate with zero Lambda errors.  
 - **Performance**: Achieved sub-second latency for real-time analytics.  
-- **Cost Efficiency**: Validated S3 storage costs at $0.004/month through AWS Cost Explorer.
+- **Cost Efficiency**: Validated S3 storage costs at $0/month through AWS Cost Explorer.
 
 ---
 
